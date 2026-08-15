@@ -20,4 +20,5 @@ public class SolarbankConfiguration {
 
     public @Nullable String siteId;
     public @Nullable String deviceSn;
+    public @Nullable String productCode;
 }

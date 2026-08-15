@@ -6,7 +6,7 @@
         https://openhab.org/schemas/addon-1.0.0.xsd">
     <type>binding</type>
     <name>Anker Solix Binding</name>
-    <description>Binding for Anker Solix Solarbank 3 Pro energy storage system.
+    <description>Binding for Anker Solix storage system.
         Supports real-time monitoring via MQTT and control via cloud API.</description>
     <connection>cloud</connection>
 </addon:addon>

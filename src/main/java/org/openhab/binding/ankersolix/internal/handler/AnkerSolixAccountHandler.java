@@ -143,7 +143,7 @@ public class AnkerSolixAccountHandler extends BaseBridgeHandler implements MqttM
 
             // Subscribe and trigger for all registered child devices
             for (Map.Entry<String, SolarbankHandler> entry : childHandlers.entrySet()) {
-                mqtt.subscribeAndTrigger(mqttInfo.appName, "A17C5", entry.getKey());
+                mqtt.subscribeAndTrigger(mqttInfo.appName, entry.getValue().getProductCode(), entry.getKey());
             }
 
             logger.info("MQTT client connected to {}", mqttInfo.endpointAddr);
@@ -278,7 +278,7 @@ public class AnkerSolixAccountHandler extends BaseBridgeHandler implements MqttM
 
     // --- Child handler management ---
 
-    public void registerChildHandler(String deviceSn, SolarbankHandler handler) {
+    public void registerChildHandler(String productCode, String deviceSn, SolarbankHandler handler) {
         childHandlers.put(deviceSn, handler);
         logger.debug("Registered child handler for device {}", deviceSn);
 
@@ -289,7 +289,7 @@ public class AnkerSolixAccountHandler extends BaseBridgeHandler implements MqttM
                 AnkerSolixApiClient client = apiClient;
                 if (client != null) {
                     MqttInfoResponse info = client.getMqttInfo();
-                    mqtt.subscribeAndTrigger(info.appName, "A17C5", deviceSn);
+                    mqtt.subscribeAndTrigger(info.appName, productCode, deviceSn);
                 }
             } catch (Exception e) {
                 logger.warn("Failed to subscribe MQTT for device {}: {}", deviceSn, e.getMessage());

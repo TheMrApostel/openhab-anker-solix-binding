@@ -17,6 +17,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.eclipse.jetty.client.HttpClient;
@@ -37,6 +39,8 @@ public class AnkerSolixApiClient {
 
     private static final Logger logger = LoggerFactory.getLogger(AnkerSolixApiClient.class);
     private static final int TIMEOUT_SECONDS = 15;
+    private final static String DEFAULT_SCHEDULE = "00:00-24:00/";
+    private final static int DEFAULT_HOME_LOAD = 200;
 
     private final HttpClient httpClient;
     private final AnkerSolixAuth auth;
@@ -54,7 +58,7 @@ public class AnkerSolixApiClient {
         this.httpClient = httpClient;
         this.auth = auth;
         this.rateLimiter = new RateLimiter();
-        this.gson = new Gson();
+        this.gson = new GsonBuilder().serializeNulls().create();
         this.baseUrl = ApiEndpoints.getBaseUrl(server);
         this.country = country;
         this.email = email;
@@ -214,33 +218,35 @@ public class AnkerSolixApiClient {
      * @param siteId site ID
      * @param watts home load power in watts
      */
-    public void setHomeLoad(String siteId, int watts) throws Exception {
+    public boolean setHomeLoad(String siteId, int watts) throws Exception {
         // Build compact param_data JSON for a simple all-day schedule
-        JsonObject range = new JsonObject();
-        range.addProperty("start_time", "00:00");
-        range.addProperty("end_time", "24:00");
-        range.addProperty("power", watts);
 
-        com.google.gson.JsonArray ranges = new com.google.gson.JsonArray();
-        ranges.add(range);
+        var customRatePlan = createCustomRatePlan(DEFAULT_SCHEDULE + watts);
+        return setHomeLoad(siteId, customRatePlan);
+    }
 
-        com.google.gson.JsonArray week = new com.google.gson.JsonArray();
-        for (int i = 0; i <= 6; i++) {
-            week.add(i);
+    /**
+     * Set home load via SB2/SB3 schedule (param_type=6).
+     * Sets a single all-day schedule with the given power output.
+     *
+     * @param siteId site ID
+     * @param customRatePlanAsString plan as string
+     */
+    public boolean setHomeLoad(String siteId, String customRatePlanAsString) throws Exception {
+        var customRatePlan = createCustomRatePlan(customRatePlanAsString);
+        return setHomeLoad(siteId, customRatePlan);
+    }
+
+    private boolean setHomeLoad(String siteId, JsonArray customRatePlan) throws Exception {
+        if(customRatePlan.isEmpty()) {
+            logger.warn("Custom rate plan is empty, not setting home load");
+            return false;
         }
-
-        JsonObject plan = new JsonObject();
-        plan.addProperty("index", 0);
-        plan.add("week", week);
-        plan.add("ranges", ranges);
-
-        com.google.gson.JsonArray customRatePlan = new com.google.gson.JsonArray();
-        customRatePlan.add(plan);
-
         JsonObject paramData = new JsonObject();
         paramData.addProperty("mode_type", 3); // manual mode
         paramData.add("custom_rate_plan", customRatePlan);
-        paramData.addProperty("default_home_load", watts);
+        paramData.add("blend_plan", null);
+        paramData.addProperty("default_home_load", DEFAULT_HOME_LOAD);
         paramData.addProperty("max_load", 800);
         paramData.addProperty("min_load", 0);
         paramData.addProperty("step", 10);
@@ -257,7 +263,7 @@ public class AnkerSolixApiClient {
         postAuthenticated(ApiEndpoints.SET_DEVICE_PARAM, body,
                 new TypeToken<ApiResponse<JsonObject>>() {
                 }.getType());
-        logger.debug("Set home load for site {} to {} W", siteId, watts);
+        return true;
     }
 
     public boolean isAuthenticated() {
@@ -354,5 +360,60 @@ public class AnkerSolixApiClient {
         public AuthException(String message) {
             super(message);
         }
+    }
+
+    private JsonArray createCustomRatePlan(String s) {
+        // Expected format: "00:00-08:00/100,08:00-16:00/200,16:00-00:00/150"
+        var customRatePlan = new JsonArray();
+        com.google.gson.JsonArray ranges = new com.google.gson.JsonArray();
+        var sRanges = s.split(",");
+        for (int i = 0; i < sRanges.length; i++) {
+            var sRange = sRanges[i];
+            var sRangeParts = sRange.split("/");
+            if (sRangeParts.length != 2) {
+                logger.warn("Invalid range format: {}", sRange);
+                continue;
+            }
+            try {
+                var watts = Integer.parseInt(sRangeParts[1]);
+                if (watts < 0) {
+                    logger.warn("Negative power value in range: {}", sRange);
+                    continue;
+                }
+                if (sRangeParts[0].length() != 11 || sRangeParts[0].charAt(5) != '-' ||
+                        sRangeParts[0].charAt(2) != ':' || sRangeParts[0].charAt(8) != ':') {
+                    logger.warn("Invalid time range format: {}", sRange);
+                    continue;
+                }
+                var h1 = Integer.parseInt(sRangeParts[0].substring(0, 2));
+                var m1 = Integer.parseInt(sRangeParts[0].substring(3, 5));
+                var h2 = Integer.parseInt(sRangeParts[0].substring(6, 8));
+                var m2 = Integer.parseInt(sRangeParts[0].substring(9, 11));
+                if (h1 < 0 || h1 > 24 || m1 < 0 || m1 > 59 || h2 < 0 || h2 > 24 || m2 < 0 || m2 > 59) {
+                    logger.warn("Invalid time values in range: {}", sRange);
+                    continue;
+                }
+                JsonObject range = new JsonObject();
+                range.addProperty("start_time", String.format("%02d:%02d", h1, m1));
+                range.addProperty("end_time", String.format("%02d:%02d", h2, m2));
+                range.addProperty("power", watts);
+                ranges.add(range);
+            } catch (NumberFormatException e) {
+                logger.warn("Wrong format in: {}", sRange);
+                continue;
+            }
+        }
+        if (!ranges.isEmpty()) {
+            com.google.gson.JsonArray week = new com.google.gson.JsonArray();
+            for (int i = 0; i <= 6; i++) {
+                week.add(i);
+            }
+            JsonObject plan = new JsonObject();
+            plan.addProperty("index", 0);
+            plan.add("week", week);
+            plan.add("ranges", ranges);
+            customRatePlan.add(plan);
+        }
+        return customRatePlan;
     }
 }

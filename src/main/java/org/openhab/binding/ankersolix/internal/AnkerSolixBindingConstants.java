@@ -61,6 +61,8 @@ public class AnkerSolixBindingConstants {
     public static final String CHANNEL_PV_YIELD = "pv-yield";
     public static final String CHANNEL_CHARGED_ENERGY = "charged-energy";
     public static final String CHANNEL_DISCHARGED_ENERGY = "discharged-energy";
+    public static final String CHANNEL_OUTPUT_ENERGY = "charged-energy";
+    public static final String CHANNEL_CONSUMED_ENERGY = "consumed-energy";
     public static final String CHANNEL_DAILY_SOLAR = "daily-solar";
     public static final String CHANNEL_DAILY_CHARGE = "daily-charge";
     public static final String CHANNEL_DAILY_DISCHARGE = "daily-discharge";
@@ -68,6 +70,7 @@ public class AnkerSolixBindingConstants {
     public static final String CHANNEL_DAILY_GRID_EXPORT = "daily-grid-export";
 
     // Settings channel IDs
+    public static final String CHANNEL_HOME_PRESET = "home-preset";
     public static final String CHANNEL_MIN_SOC = "min-soc";
     public static final String CHANNEL_MAX_LOAD = "max-load";
     public static final String CHANNEL_AC_SOCKET = "ac-socket-switch";
@@ -79,6 +82,7 @@ public class AnkerSolixBindingConstants {
     // REST Control channel IDs (work without MQTT)
     public static final String GROUP_REST_CONTROL = "restControl";
     public static final String CHANNEL_REST_HOME_LOAD = "home-load";
+    public static final String CHANNEL_REST_HOME_LOAD_SCHEDULE = "home-load-schedule";
     public static final String CHANNEL_REST_OUTPUT_LIMIT = "output-limit";
     public static final String CHANNEL_REST_PV_LIMIT = "pv-input-limit";
     public static final String CHANNEL_REST_AC_LIMIT = "ac-input-limit";

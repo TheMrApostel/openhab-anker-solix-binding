@@ -51,8 +51,8 @@
         <supported-bridge-type-refs>
             <bridge-type-ref id="account"/>
         </supported-bridge-type-refs>
-        <label>Solarbank 3 Pro</label>
-        <description>Anker Solix Solarbank 3 E2700 Pro (A17C5)</description>
+        <label>Solarbank 2 Pro</label>
+        <description>Anker Solix Solarbank 2 Pro (A17C1)</description>
         <channel-groups>
             <channel-group id="power" typeId="solarbank-power"/>
             <channel-group id="solar" typeId="solarbank-solar"/>
@@ -68,6 +68,10 @@
             <parameter name="siteId" type="text" required="true">
                 <label>Site ID</label>
                 <description>Anker Solix site identifier</description>
+            </parameter>
+            <parameter name="productCode" type="text" required="true">
+                <label>Product Code</label>
+                <description>Anker Solix product code</description>
             </parameter>
             <parameter name="deviceSn" type="text" required="true">
                 <label>Device Serial Number</label>
@@ -171,6 +175,14 @@
                 <label>Discharged Total</label>
                 <description>Total energy discharged from battery</description>
             </channel>
+            <channel id="output-energy" typeId="energy-reading">
+                <label>Output Energy</label>
+                <description>Output Energy</description>
+            </channel>
+            <channel id="consumed-energy" typeId="energy-reading">
+                <label>Consumed Energy</label>
+                <description>Consumed Energy</description>
+            </channel>
             <channel id="daily-solar" typeId="energy-reading">
                 <label>Daily Solar</label>
                 <description>Solar generation today</description>
@@ -224,6 +236,10 @@
                 <label>Status Light</label>
                 <description>Status light on/off</description>
             </channel>
+            <channel id="home-preset" typeId="power-setting">
+                <label>Home Preset</label>
+                <description>Home power preset</description>
+            </channel>
         </channels>
     </channel-group-type>
 
@@ -235,6 +251,10 @@
             <channel id="home-load" typeId="power-setting">
                 <label>Home Load Preset</label>
                 <description>Default home load output power in watts (set via schedule)</description>
+            </channel>
+            <channel id="home-load-schedule" typeId="power-setting">
+                <label>Home Load Preset Schedule</label>
+                <description>Home load output power via schedule</description>
             </channel>
             <channel id="output-limit" typeId="power-setting">
                 <label>AC Output Limit</label>

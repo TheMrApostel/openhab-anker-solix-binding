@@ -354,14 +354,16 @@ public class AnkerSolixMqttClient implements MqttCallbackExtended {
         String dataBase64 = Base64.getEncoder().encodeToString(binaryPayload);
 
         JsonObject payloadInner = new JsonObject();
-        payloadInner.addProperty("account_id", "");
+        //payloadInner.addProperty("account_id", "");
+        payloadInner.addProperty("account_id", mqttClient.getClientId().substring(0, mqttClient.getClientId().indexOf('-')));
         payloadInner.addProperty("device_sn", deviceSn);
         payloadInner.addProperty("data", dataBase64);
 
         JsonObject head = new JsonObject();
         head.addProperty("version", "1.0.0.1");
         head.addProperty("client_id", mqttClient.getClientId());
-        head.addProperty("sess_id", "");
+        //head.addProperty("sess_id", "");
+        head.addProperty("sess_id", "1234-5678");
         head.addProperty("msg_seq", 1);
         head.addProperty("seed", 1);
         head.addProperty("timestamp", System.currentTimeMillis() / 1000);

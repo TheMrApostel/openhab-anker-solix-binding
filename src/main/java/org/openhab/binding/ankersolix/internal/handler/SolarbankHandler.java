@@ -24,6 +24,7 @@ import javax.measure.quantity.Energy;
 import javax.measure.quantity.Power;
 import javax.measure.quantity.Temperature;
 
+import com.google.gson.JsonArray;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.binding.ankersolix.internal.api.AnkerSolixApiClient;
@@ -59,6 +60,7 @@ public class SolarbankHandler extends BaseThingHandler {
 
     private @Nullable String siteId;
     private @Nullable String deviceSn;
+    private @Nullable String productCode;
     private final Map<String, Instant> recentCommands = new ConcurrentHashMap<>();
 
     public SolarbankHandler(Thing thing) {
@@ -71,10 +73,12 @@ public class SolarbankHandler extends BaseThingHandler {
 
         this.siteId = config.siteId;
         this.deviceSn = config.deviceSn;
+        this.productCode = config.productCode;
 
-        if (siteId == null || siteId.isBlank() || deviceSn == null || deviceSn.isBlank()) {
+        if (siteId == null || siteId.isBlank() || deviceSn == null || deviceSn.isBlank()
+            || productCode == null || productCode.isBlank()) {
             updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.CONFIGURATION_ERROR,
-                    "Site ID and Device Serial Number are required");
+                    "Site ID, Product Code and Device Serial Number are required");
             return;
         }
 
@@ -84,7 +88,7 @@ public class SolarbankHandler extends BaseThingHandler {
             return;
         }
 
-        bridgeHandler.registerChildHandler(deviceSn, this);
+        bridgeHandler.registerChildHandler(productCode, deviceSn, this);
         updateStatus(ThingStatus.UNKNOWN);
     }
 
@@ -118,6 +122,11 @@ public class SolarbankHandler extends BaseThingHandler {
         if (sn == null) {
             return;
         }
+        
+        String pc = productCode;
+        if (pc == null) {
+            return;
+        }
 
         // REST Control group - works without MQTT
         if (GROUP_REST_CONTROL.equals(groupId)) {
@@ -139,45 +148,45 @@ public class SolarbankHandler extends BaseThingHandler {
             switch (channelId) {
                 case CHANNEL_MIN_SOC:
                     if (command instanceof DecimalType decimal) {
-                        mqtt.sendMinSocCommand(sn, "A17C5", decimal.intValue());
+                        mqtt.sendMinSocCommand(sn, pc, decimal.intValue());
                     } else if (command instanceof QuantityType<?> qty) {
-                        mqtt.sendMinSocCommand(sn, "A17C5", qty.intValue());
+                        mqtt.sendMinSocCommand(sn, pc, qty.intValue());
                     }
                     break;
                 case CHANNEL_MAX_LOAD:
                     if (command instanceof QuantityType<?> qty) {
-                        mqtt.sendMaxLoadCommand(sn, "A17C5", qty.intValue());
+                        mqtt.sendMaxLoadCommand(sn, pc, qty.intValue());
                     } else if (command instanceof DecimalType decimal) {
-                        mqtt.sendMaxLoadCommand(sn, "A17C5", decimal.intValue());
+                        mqtt.sendMaxLoadCommand(sn, pc, decimal.intValue());
                     }
                     break;
                 case CHANNEL_AC_SOCKET:
                     if (command instanceof OnOffType) {
-                        mqtt.sendAcSocketCommand(sn, "A17C5", command == OnOffType.ON);
+                        mqtt.sendAcSocketCommand(sn, pc, command == OnOffType.ON);
                     }
                     break;
                 case CHANNEL_DISABLE_GRID_EXPORT:
                     if (command instanceof OnOffType) {
-                        mqtt.sendDisableGridExportCommand(sn, "A17C5", command == OnOffType.ON);
+                        mqtt.sendDisableGridExportCommand(sn, pc, command == OnOffType.ON);
                     }
                     break;
                 case CHANNEL_AC_INPUT_LIMIT:
                     if (command instanceof QuantityType<?> qty) {
-                        mqtt.sendAcInputLimitCommand(sn, "A17C5", qty.intValue());
+                        mqtt.sendAcInputLimitCommand(sn, pc, qty.intValue());
                     } else if (command instanceof DecimalType decimal) {
-                        mqtt.sendAcInputLimitCommand(sn, "A17C5", decimal.intValue());
+                        mqtt.sendAcInputLimitCommand(sn, pc, decimal.intValue());
                     }
                     break;
                 case CHANNEL_PV_LIMIT:
                     if (command instanceof QuantityType<?> qty) {
-                        mqtt.sendPvLimitCommand(sn, "A17C5", qty.intValue());
+                        mqtt.sendPvLimitCommand(sn, pc, qty.intValue());
                     } else if (command instanceof DecimalType decimal) {
-                        mqtt.sendPvLimitCommand(sn, "A17C5", decimal.intValue());
+                        mqtt.sendPvLimitCommand(sn, pc, decimal.intValue());
                     }
                     break;
                 case CHANNEL_LIGHT_SWITCH:
                     if (command instanceof OnOffType) {
-                        mqtt.sendLightSwitchCommand(sn, "A17C5", command == OnOffType.ON);
+                        mqtt.sendLightSwitchCommand(sn, pc, command == OnOffType.ON);
                     }
                     break;
                 default:
@@ -355,8 +364,9 @@ public class SolarbankHandler extends BaseThingHandler {
         // Power channels
         updateMqttPower(fields, "photovoltaic_power", GROUP_POWER, CHANNEL_PV_POWER);
         updateMqttPower(fields, "output_power", GROUP_POWER, CHANNEL_OUTPUT_POWER);
-        updateMqttPower(fields, "ac_output_power_signed", GROUP_POWER, CHANNEL_AC_OUTPUT_POWER);
+        updateMqttPower(fields, "ac_output_power", GROUP_POWER, CHANNEL_AC_OUTPUT_POWER);
         updateMqttPower(fields, "home_demand", GROUP_POWER, CHANNEL_HOME_DEMAND);
+
 
         // Solar strings
         updateMqttPower(fields, "pv_1_power", GROUP_SOLAR, CHANNEL_PV1_POWER);
@@ -365,7 +375,16 @@ public class SolarbankHandler extends BaseThingHandler {
         updateMqttPower(fields, "pv_4_power", GROUP_SOLAR, CHANNEL_PV4_POWER);
 
         // Battery
-        updateMqttPower(fields, "battery_power_signed", GROUP_BATTERY, CHANNEL_BATTERY_POWER);
+        if (fields.containsKey("bat_charge_power") && fields.containsKey("bat_discharge_power")) {
+            var chargeValue = ((Number) fields.get("bat_charge_power")).doubleValue();
+            var dischargeValue = ((Number) fields.get("bat_discharge_power")).doubleValue();
+            // dischargeValue is read as unsigned number
+            var value = chargeValue - dischargeValue;
+            updateState(new ChannelUID(getThing().getUID(), GROUP_BATTERY, CHANNEL_BATTERY_POWER),
+                    new QuantityType<>(value, Units.WATT));
+        } else {
+            updateMqttPower(fields, "bat_charge_power", GROUP_BATTERY, CHANNEL_BATTERY_POWER);
+        }
         if (fields.containsKey("battery_soc")) {
             double soc = ((Number) fields.get("battery_soc")).doubleValue();
             updateState(new ChannelUID(getThing().getUID(), GROUP_BATTERY, CHANNEL_BATTERY_SOC),
@@ -384,8 +403,15 @@ public class SolarbankHandler extends BaseThingHandler {
         updateMqttEnergy(fields, "pv_yield", GROUP_ENERGY, CHANNEL_PV_YIELD);
         updateMqttEnergy(fields, "charged_energy", GROUP_ENERGY, CHANNEL_CHARGED_ENERGY);
         updateMqttEnergy(fields, "discharged_energy", GROUP_ENERGY, CHANNEL_DISCHARGED_ENERGY);
+        updateMqttEnergy(fields, "output_energy", GROUP_ENERGY, CHANNEL_OUTPUT_ENERGY);
+        updateMqttEnergy(fields, "consumed_energy", GROUP_ENERGY, CHANNEL_CONSUMED_ENERGY);
 
         // Settings state from telemetry
+        if (fields.containsKey("home_load_preset")) {
+            updateState(new ChannelUID(getThing().getUID(), GROUP_SETTINGS, CHANNEL_HOME_PRESET),
+                    new QuantityType<>(((Number) fields.get("home_load_preset")).doubleValue(), Units.WATT));
+        }
+
         if (fields.containsKey("min_soc")) {
             updateState(new ChannelUID(getThing().getUID(), GROUP_SETTINGS, CHANNEL_MIN_SOC),
                     new QuantityType<>(((Number) fields.get("min_soc")).doubleValue(), Units.PERCENT));
@@ -483,6 +509,10 @@ public class SolarbankHandler extends BaseThingHandler {
         return deviceSn;
     }
 
+    public @Nullable String getProductCode() {
+        return productCode;
+    }
+
     // --- Private helpers ---
 
     private void handleRestControlCommand(String channelId, Command command,
@@ -504,14 +534,24 @@ public class SolarbankHandler extends BaseThingHandler {
                 case CHANNEL_REST_HOME_LOAD:
                     int watts = extractWatts(command);
                     if (watts >= 0) {
-                        apiClient.setHomeLoad(site, watts);
-                        markCommandSent(CHANNEL_REST_HOME_LOAD);
-                        updateState(new ChannelUID(getThing().getUID(), GROUP_REST_CONTROL, CHANNEL_REST_HOME_LOAD),
-                                new QuantityType<>(watts, Units.WATT));
-                        logger.debug("Set home load to {} W via REST", watts);
+                        if(apiClient.setHomeLoad(site, watts)) {
+                            markCommandSent(CHANNEL_REST_HOME_LOAD);
+                            updateState(new ChannelUID(getThing().getUID(), GROUP_REST_CONTROL, CHANNEL_REST_HOME_LOAD),
+                                    new QuantityType<>(watts, Units.WATT));
+                            logger.debug("Set home load to {} W via REST", watts);
+                        }
                     }
                     break;
-
+                case CHANNEL_REST_HOME_LOAD_SCHEDULE:
+                    if (command instanceof StringType stringCommand) {
+                        if (apiClient.setHomeLoad(site, stringCommand.toString())) {
+                            markCommandSent(CHANNEL_REST_HOME_LOAD_SCHEDULE);
+                            updateState(new ChannelUID(getThing().getUID(), GROUP_REST_CONTROL, CHANNEL_REST_HOME_LOAD_SCHEDULE),
+                                    new StringType(stringCommand.toString()));
+                            logger.debug("Set home load schedule to {} via REST", stringCommand.toString());
+                        }
+                    }
+                    break;
                 case CHANNEL_REST_OUTPUT_LIMIT:
                     int outputLimit = extractWatts(command);
                     if (outputLimit >= 0) {
