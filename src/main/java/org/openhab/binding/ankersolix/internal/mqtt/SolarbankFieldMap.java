@@ -141,9 +141,9 @@ public final class SolarbankFieldMap {
         map.put(0xB1, new FieldDef("pv_yield", false, 0.0001));
         map.put(0xB3, new FieldDef("output_energy", false, 0.0001));
         map.put(0xB2, new FieldDef("charged_energy", false, 0.00001));
-        map.put(0xB4, new FieldDef("output_cutoff_data"));
+        map.put(0xB4, new FieldDef("min_soc"));
         map.put(0xB5, new FieldDef("lowpower_input_data"));
-        map.put(0xB6, new FieldDef("input_cutoff_data"));
+        map.put(0xB6, new FieldDef("active_charge_soc"));
         map.put(0xB7, new FieldDef("bat_discharge_power", false, 0.01));
         map.put(0xBC, new FieldDef("grid_to_home_power", false, 0.1));
         map.put(0xBD, new FieldDef("pv_to_grid_power", false, 0.1));
@@ -177,7 +177,7 @@ public final class SolarbankFieldMap {
 
     public static Map<Integer, FieldDef> getFieldMap(String productCode, int messageType) {
         return switch (productCode) {
-            case "A17C1" -> {
+            case "A17C1", "A17C3" -> { // Solarbank 2 Pro and Plus share the same layout (see anker-solix-api mqttmap.py)
                 if (messageType == 0x0405) {
                     yield A17C1_0405;
                 }
