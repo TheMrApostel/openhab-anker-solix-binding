@@ -398,6 +398,13 @@ public class SolarbankHandler extends BaseThingHandler {
 
         // Grid
         updateMqttPower(fields, "grid_power_signed", GROUP_GRID, CHANNEL_GRID_POWER);
+        // Solarbank 2 (A17C1/A17C3) reports grid flows separately: positive = import from grid, negative = export
+        if (fields.containsKey("grid_to_home_power") && fields.containsKey("pv_to_grid_power")) {
+            double gridValue = ((Number) fields.get("grid_to_home_power")).doubleValue()
+                    - ((Number) fields.get("pv_to_grid_power")).doubleValue();
+            updateState(new ChannelUID(getThing().getUID(), GROUP_GRID, CHANNEL_GRID_POWER),
+                    new QuantityType<>(gridValue, Units.WATT));
+        }
 
         // Cumulative energy
         updateMqttEnergy(fields, "pv_yield", GROUP_ENERGY, CHANNEL_PV_YIELD);
